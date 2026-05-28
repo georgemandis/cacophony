@@ -1,0 +1,47 @@
+const std = @import("std");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const target_os = target.result.os.tag;
+
+    // Shared module for sound analysis logic
+    const sound_mod = b.createModule(.{
+        .root_source_file = b.path("src/sound.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    if (target_os == .macos) {
+        sound_mod.linkSystemLibrary("objc", .{});
+        sound_mod.linkFramework("Foundation", .{});
+        sound_mod.linkFramework("SoundAnalysis", .{});
+        sound_mod.linkFramework("AVFoundation", .{});
+        sound_mod.linkFramework("CoreAudio", .{});
+        sound_mod.linkFramework("CoreMedia", .{});
+    }
+
+    // CLI executable
+    const exe = b.addExecutable(.{
+        .name = "cacophony",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "sound", .module = sound_mod },
+            },
+        }),
+    });
+    b.installArtifact(exe);
+
+    // Run step
+    const run_cmd = b.addRunArtifact(exe);
+    run_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+
+    const run_step = b.step("run", "Run the cacophony CLI");
+    run_step.dependOn(&run_cmd.step);
+}
