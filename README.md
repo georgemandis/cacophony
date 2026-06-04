@@ -8,9 +8,20 @@ Written in Zig. Uses Apple's SoundAnalysis and AVFoundation frameworks via Objec
 
 ## Install
 
+### Homebrew
+
 ```bash
+brew install georgemandis/tap/cacophony
+```
+
+### From source
+
+Requires [Zig 0.16+](https://ziglang.org/download/) and macOS.
+
+```bash
+git clone https://github.com/georgemandis/cacophony.git
+cd cacophony
 zig build -Doptimize=ReleaseFast
-cp zig-out/bin/cacophony /usr/local/bin/
 ```
 
 ## Usage
