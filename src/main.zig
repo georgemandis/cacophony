@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const sound = @import("sound");
 
-const version = "0.1.0";
+const version = "0.1.1";
 
 fn printUsage(writer: *std.Io.Writer) !void {
     try writer.print(
@@ -16,6 +16,7 @@ fn printUsage(writer: *std.Io.Writer) !void {
         \\  classify <file>    Classify sounds in an audio file
         \\  listen             Classify sounds from the microphone
         \\  categories         List all recognized sound categories
+        \\  completions <shell> Generate shell completions (bash, zsh, fish)
         \\  help               Show this help message
         \\
         \\Options:
@@ -84,6 +85,11 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, command, "--version") or std.mem.eql(u8, command, "-v")) {
         try stdout.interface.print("cacophony " ++ version ++ " (" ++ @tagName(builtin.os.tag) ++ ")\n", .{});
         try stdout.interface.flush();
+        return;
+    }
+
+    if (std.mem.eql(u8, command, "completions")) {
+        try cmdCompletions(&args_iter, &stdout.interface, &stderr.interface);
         return;
     }
 
@@ -209,6 +215,155 @@ fn printClassifications(writer: *std.Io.Writer, results: []const sound.Classific
             try writer.print("{d:.4}\t{s}\n", .{ r.confidence, r.label });
         }
     }
+}
+
+fn cmdCompletions(
+    args_iter: anytype,
+    stdout_writer: *std.Io.Writer,
+    stderr_writer: *std.Io.Writer,
+) !void {
+    const shell = args_iter.next() orelse {
+        try stderr_writer.print("Error: 'completions' requires a shell: bash, zsh, or fish\n", .{});
+        try stderr_writer.flush();
+        std.process.exit(2);
+        unreachable;
+    };
+
+    if (std.mem.eql(u8, shell, "bash")) {
+        try stdout_writer.print(
+            \\# cacophony completions for bash
+            \\# Install: eval "$(cacophony completions bash)"
+            \\# Persist: cacophony completions bash > /etc/bash_completion.d/cacophony
+            \\
+            \\_cacophony() {{
+            \\    local cur prev words cword
+            \\    _init_completion || return
+            \\
+            \\    local commands="classify listen categories completions help"
+            \\
+            \\    if [[ $cword -eq 1 ]]; then
+            \\        COMPREPLY=($(compgen -W "$commands --help -h --version -v" -- "$cur"))
+            \\        return
+            \\    fi
+            \\
+            \\    local cmd="${{words[1]}}"
+            \\
+            \\    case "$cmd" in
+            \\        classify)
+            \\            COMPREPLY=($(compgen -W "--top= --threshold= --json" -- "$cur"))
+            \\            ;;
+            \\        listen)
+            \\            COMPREPLY=($(compgen -W "--top= --threshold= --duration= --json" -- "$cur"))
+            \\            ;;
+            \\        categories)
+            \\            COMPREPLY=($(compgen -W "--json" -- "$cur"))
+            \\            ;;
+            \\        completions)
+            \\            COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+            \\            ;;
+            \\    esac
+            \\}}
+            \\
+            \\complete -F _cacophony cacophony
+            \\
+        , .{});
+    } else if (std.mem.eql(u8, shell, "zsh")) {
+        try stdout_writer.print(
+            \\#compdef cacophony
+            \\# cacophony completions for zsh
+            \\# Install: cacophony completions zsh | source /dev/stdin
+            \\# Persist: cacophony completions zsh > ~/.zfunc/_cacophony && fpath+=(~/.zfunc)
+            \\
+            \\_cacophony() {{
+            \\    local -a commands
+            \\    commands=(
+            \\        'classify:Classify sounds in an audio file'
+            \\        'listen:Classify sounds from the microphone'
+            \\        'categories:List all recognized sound categories'
+            \\        'completions:Generate shell completions'
+            \\        'help:Show help message'
+            \\    )
+            \\
+            \\    _arguments -C \
+            \\        '1:command:->command' \
+            \\        '*::arg:->args'
+            \\
+            \\    case "$state" in
+            \\        command)
+            \\            _describe 'command' commands
+            \\            ;;
+            \\        args)
+            \\            case "$words[1]" in
+            \\                classify)
+            \\                    _arguments \
+            \\                        '--top=[Show top N classifications]:N:' \
+            \\                        '--threshold=[Minimum confidence 0.0-1.0]:N:' \
+            \\                        '--json[Output as JSON]' \
+            \\                        '1:file:_files'
+            \\                    ;;
+            \\                listen)
+            \\                    _arguments \
+            \\                        '--top=[Show top N classifications]:N:' \
+            \\                        '--threshold=[Minimum confidence 0.0-1.0]:N:' \
+            \\                        '--duration=[Listen duration in ms]:MS:' \
+            \\                        '--json[Output as JSON]'
+            \\                    ;;
+            \\                categories)
+            \\                    _arguments '--json[Output as JSON]'
+            \\                    ;;
+            \\                completions)
+            \\                    _arguments '1:shell:(bash zsh fish)'
+            \\                    ;;
+            \\            esac
+            \\            ;;
+            \\    esac
+            \\}}
+            \\
+            \\_cacophony "$@"
+            \\
+        , .{});
+    } else if (std.mem.eql(u8, shell, "fish")) {
+        try stdout_writer.print(
+            \\# cacophony completions for fish
+            \\# Install: cacophony completions fish | source
+            \\# Persist: cacophony completions fish > ~/.config/fish/completions/cacophony.fish
+            \\
+            \\complete -e -c cacophony
+            \\complete -c cacophony -f
+            \\complete -c cacophony -n "__fish_use_subcommand" -a "classify" -d "Classify sounds in an audio file"
+            \\complete -c cacophony -n "__fish_use_subcommand" -a "listen" -d "Classify sounds from the microphone"
+            \\complete -c cacophony -n "__fish_use_subcommand" -a "categories" -d "List all recognized sound categories"
+            \\complete -c cacophony -n "__fish_use_subcommand" -a "completions" -d "Generate shell completions"
+            \\complete -c cacophony -n "__fish_use_subcommand" -a "help" -d "Show help message"
+            \\complete -c cacophony -n "__fish_use_subcommand" -l help -s h -d "Show help"
+            \\complete -c cacophony -n "__fish_use_subcommand" -l version -s v -d "Show version"
+            \\
+            \\# classify options
+            \\complete -c cacophony -n "__fish_seen_subcommand_from classify" -l top -r -d "Show top N classifications"
+            \\complete -c cacophony -n "__fish_seen_subcommand_from classify" -l threshold -r -d "Minimum confidence 0.0-1.0"
+            \\complete -c cacophony -n "__fish_seen_subcommand_from classify" -l json -d "Output as JSON"
+            \\
+            \\# listen options
+            \\complete -c cacophony -n "__fish_seen_subcommand_from listen" -l top -r -d "Show top N classifications"
+            \\complete -c cacophony -n "__fish_seen_subcommand_from listen" -l threshold -r -d "Minimum confidence 0.0-1.0"
+            \\complete -c cacophony -n "__fish_seen_subcommand_from listen" -l duration -r -d "Listen duration in ms"
+            \\complete -c cacophony -n "__fish_seen_subcommand_from listen" -l json -d "Output as JSON"
+            \\
+            \\# categories options
+            \\complete -c cacophony -n "__fish_seen_subcommand_from categories" -l json -d "Output as JSON"
+            \\
+            \\# completions sub-targets
+            \\complete -c cacophony -n "__fish_seen_subcommand_from completions" -a "bash zsh fish" -d "Shell type"
+            \\
+        , .{});
+    } else {
+        try stderr_writer.print("Error: unsupported shell '{s}'. Use bash, zsh, or fish\n", .{shell});
+        try stderr_writer.flush();
+        std.process.exit(2);
+        unreachable;
+    }
+
+    try stdout_writer.flush();
 }
 
 fn printSoundError(writer: *std.Io.Writer, err: sound.SoundError) !void {

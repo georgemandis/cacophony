@@ -1,6 +1,7 @@
 .{
+    .fingerprint = 0x4a36de92b4d63b22,
     .name = .cacophony,
-    .version = "0.0.1",
+    .version = "0.1.1",
     .minimum_zig_version = "0.16.0",
     .paths = .{""},
 }
